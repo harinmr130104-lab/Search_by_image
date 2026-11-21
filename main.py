@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tkinter as tk
+from argparse import ArgumentParser
 from ctypes import wintypes
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,8 +13,11 @@ from pathlib import Path
 from secrets import token_urlsafe
 from threading import Event, Lock
 from time import monotonic, sleep
+from tkinter import messagebox
 
 from PIL import Image, ImageGrab, ImageTk
+
+from hotkey import listen_for_hotkey, stop_hotkey
 
 
 def select_region(screenshot: Image.Image) -> tuple[int, int, int, int] | None:
@@ -335,5 +339,34 @@ def main() -> None:
     print("Снимок передан в Chrome. Проверьте результат в окне поиска.")
 
 
+def run_cli() -> None:
+    parser = ArgumentParser(description="Поиск по скриншоту в Google Lens.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--hotkey", action="store_true", help="Включить Ctrl + Print Screen.")
+    mode.add_argument("--stop-hotkey", action="store_true", help="Остановить фоновый режим.")
+    options = parser.parse_args()
+
+    if not (options.hotkey or options.stop_hotkey):
+        main()
+        return
+
+    try:
+        if options.hotkey:
+            listen_for_hotkey([sys.executable, str(Path(__file__).resolve())])
+        elif stop_hotkey():
+            print("Фоновый режим остановлен.")
+        else:
+            print("Фоновый режим уже остановлен.")
+    except KeyboardInterrupt:
+        pass
+    except OSError as error:
+        raise SystemExit(f"Ошибка фонового режима: {error}") from error
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        run_cli()
+    except SystemExit as error:
+        if sys.stderr is None and isinstance(error.code, str):
+            messagebox.showerror("Поиск по скриншоту", error.code)
+        raise
